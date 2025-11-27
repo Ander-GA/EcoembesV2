@@ -5,5 +5,5 @@ import es.deusto.sd.ecoembes.entity.Asignacion;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 @Repository
-public interface AsignacionService extends JpaRepository<Asignacion, Long> {
+public interface RepositorioAsignaciones extends JpaRepository<Asignacion, Long> {
 }
