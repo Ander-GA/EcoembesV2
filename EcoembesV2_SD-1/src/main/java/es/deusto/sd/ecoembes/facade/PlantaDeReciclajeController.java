@@ -69,17 +69,21 @@ public class PlantaDeReciclajeController {
     
     /**
      * Asignación de contenedores a plantas de reciclaje.
-     * URL: POST /plantas/asignar  <-- CAMBIO IMPORTANTE: AÑADIDA RUTA ESPECÍFICA
+     * URL: POST /plantas/asignar
      */
     @Operation(summary = "Asignar un contenedor a una planta de reciclaje")
-    @PostMapping("/asignar") // <--- AQUÍ ESTABA EL ERROR
+    @PostMapping("/asignar") 
     public ResponseEntity<Map<String, Object>> crearAsignacion(
-            @Parameter(description = "Token de autenticación", required = true)
-            @RequestHeader("Authorization") String token,
-            @Parameter(description = "Id del Contenedor", required = true)
-            @RequestParam("Id del Contenedor")  long idContainer,
-            @Parameter(description = "Id de la Planta de Reciclaje", required = true)
-            @RequestParam("Id de la Planta de Reciclaje") long idPlantaDeReciclaje) {
+            
+            @Parameter(description = "ID del Contenedor", required = true)
+            @RequestParam("containerId")  long idContainer,
+            
+            @Parameter(description = "ID de la Planta de Reciclaje", required = true)
+            @RequestParam("plantaId") long idPlantaDeReciclaje,
+            
+            // CAMBIO CLAVE: Token en el Body (Igual que el profesor)
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Token de autenticación", required = true)
+            @RequestBody String token) {
         
         try {
             Asignacion nuevaAsignacion = plantaService.asignarContenedorAPlanta(
