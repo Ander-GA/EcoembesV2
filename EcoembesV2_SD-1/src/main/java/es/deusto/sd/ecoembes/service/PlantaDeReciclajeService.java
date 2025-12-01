@@ -1,5 +1,11 @@
 package es.deusto.sd.ecoembes.service;
 
+import es.deusto.sd.ecoembes.dao.ContainerRepository;
+import es.deusto.sd.ecoembes.dao.PlantaDeReciclajeRepository;
+import es.deusto.sd.ecoembes.dao.RepositorioAsignaciones;
+import es.deusto.sd.ecoembes.entity.Asignacion;
+import es.deusto.sd.ecoembes.entity.Container;
+import es.deusto.sd.ecoembes.entity.Empleado;
 import es.deusto.sd.ecoembes.entity.NivelLlenado;
 import es.deusto.sd.ecoembes.entity.PlantaDeReciclaje;
 import es.deusto.sd.ecoembes.service.NivelLlenadoService;
@@ -17,42 +23,88 @@ import java.util.concurrent.atomic.AtomicLong;
 @Service
 public class PlantaDeReciclajeService {
 
-    // Repositorio en memoria (como en ContainerService)
-    private final Map<Long, PlantaDeReciclaje> repositorioEnMemoria = new HashMap<>();
+	private final PlantaDeReciclajeRepository plantaRepository;
+	private final ContainerRepository containerRepository;
+	private final RepositorioAsignaciones repositorioAsignaciones;
+    private final AuthService authService;
     private final AtomicLong idGenerator = new AtomicLong(0);
 
     // Necesitamos el NivelLlenadoService para calcular la capacidad
     private final NivelLlenadoService nivelLlenadoService;
+    private final ContainerService containerService;
 
     // Inyección de dependencias
-    @Autowired
-    public PlantaDeReciclajeService(NivelLlenadoService nivelLlenadoService) {
-        this.nivelLlenadoService = nivelLlenadoService;
-    }
-
+    public PlantaDeReciclajeService(PlantaDeReciclajeRepository plantaRepository,
+			ContainerRepository containerRepository, RepositorioAsignaciones repositorioAsignaciones,AuthService authService, NivelLlenadoService nivelLlenadoService,
+			ContainerService containerService) {
+		super();
+		this.plantaRepository = plantaRepository;
+		this.containerRepository = containerRepository;
+		this.repositorioAsignaciones = repositorioAsignaciones;
+		this.authService = authService;
+		this.nivelLlenadoService = nivelLlenadoService;
+		this.containerService = containerService;
+	}
     /**
      * (Método para POST) Crea una nueva planta de reciclaje.
      */
     public PlantaDeReciclaje createPlanta(PlantaDeReciclaje planta) {
         Long nuevoId = idGenerator.incrementAndGet();
         planta.setId(nuevoId);
-        repositorioEnMemoria.put(nuevoId, planta);
+        plantaRepository.save(planta);
         return planta;
     }
 
+    public Asignacion asignarContenedorAPlanta(long containerId, long plantaId, String token) {
+        
+        // 1. Obtener Empleado (para auditoría)
+        Empleado empleado = authService.getEmpleadoByToken(token);
+        if (empleado == null) {
+            throw new SecurityException("Token inválido");
+        }
+
+        // 2. Obtener Contenedor y su Nivel actual
+        Container container = containerRepository.findById(containerId)
+            .orElseThrow(() -> new RuntimeException("Contenedor no encontrado"));
+            /*
+             * 	LO DE NIVEL DE LLENADO HABRA QUE CAMBIAR EL METODO PARA LA PERSISTENCIA
+             * */
+        NivelLlenado nivelContenedor = nivelLlenadoService.getUltimoNivelHastaFecha(
+            containerId, TipoID.CONTAINER, LocalDate.now());
+        
+        double cantidadEnContenedor = (nivelContenedor != null) ? nivelContenedor.getNivelDeLlenado() : 0.0;
+        
+        // 3. Obtener Planta y su Capacidad actual
+        PlantaDeReciclaje planta = plantaRepository.findById(plantaId)
+            .orElseThrow(() -> new RuntimeException("Planta no encontrada"));
+            
+        double capacidadDisponible = getCapacidadDisponible(plantaId, LocalDate.now());
+
+        // 4. Lógica de negocio
+        if (cantidadEnContenedor > capacidadDisponible) {
+            throw new RuntimeException("No hay capacidad disponible en la planta para este contenedor.");
+        }
+        
+        // 5. ¡Éxito! Creamos la asignación para la auditoría
+        Asignacion asignacion = new Asignacion(LocalDate.now(), empleado, planta, container);
+
+        repositorioAsignaciones.save(asignacion);
+        
+        
+        return asignacion;
+    }
+    
+    
     /**
      * (Método para GET) Obtiene una planta por su ID.
      */
-    public Optional<PlantaDeReciclaje> getPlantaById(Long id) {
-        return Optional.ofNullable(repositorioEnMemoria.get(id));
-    }
 
     /**
      * MÉTODO 4: Consulta de la capacidad de las plantas de reciclaje.
      */
     public double getCapacidadDisponible(long plantaId, LocalDate fecha) {
         // 1. Buscamos la planta
-        Optional<PlantaDeReciclaje> plantaOpt = getPlantaById(plantaId);
+        Optional<PlantaDeReciclaje> plantaOpt = plantaRepository.findById(plantaId);
         
         if (plantaOpt.isEmpty()) {
             throw new RuntimeException("Planta no encontrada");
@@ -62,6 +114,9 @@ public class PlantaDeReciclajeService {
         double capacidadMaxima = planta.getCapacidadMaxima();
 
         // 2. Buscamos su último nivel de llenado en esa fecha
+        /*
+         * SEGURAMENTE CAMBIAR NIVEL DE LLENADO POR LA PERSISTENCIA
+         * */
         NivelLlenado ultimoNivel = nivelLlenadoService.getUltimoNivelHastaFecha(plantaId, TipoID.PLANTA_DE_RECICLAJE, fecha);
 
         double nivelActual = (ultimoNivel != null) ? ultimoNivel.getNivelDeLlenado() : 0.0;

@@ -10,6 +10,7 @@ import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
+import es.deusto.sd.ecoembes.dao.ContainerRepository;
 import es.deusto.sd.ecoembes.entity.Container;
 
 @Service
@@ -17,21 +18,20 @@ public class ContainerService {
 
     // Repositorio en memoria para el Prototipo 1
     // (Se vacía si reinicias el servidor)
-    private final Map<Long, Container> repositorioEnMemoria = new HashMap<>();
+	private final ContainerRepository containerRepository;
     
     // Generador de IDs para los nuevos contenedores
     private final AtomicLong idGenerator = new AtomicLong(0);
 
-    /**
-     * Constructor vacío.
-     * El DataInitializer se encargará de llamar a 'createContainer'.
-     */
-    public ContainerService() {
-        // No se inicializan datos aquí
+    public ContainerService(ContainerRepository containerRepository) {
+			this.containerRepository = containerRepository;
     }
 
     // --- Métodos Requeridos ---
 
+    public Optional<Container> getContainerById(Long id){
+		return containerRepository.findById(id);
+    }
     /**
      * 1. Creación de un nuevo contenedor.
      * (Responde a "Creación de un nuevo contenedor")
@@ -43,7 +43,7 @@ public class ContainerService {
         container.setId(nuevoId);
         
         // Guardamos en el "repositorio" en memoria
-        repositorioEnMemoria.put(nuevoId, container);
+        containerRepository.save(container);
         return container;
     }
 
@@ -55,37 +55,8 @@ public class ContainerService {
      * para ver el estado de cada uno.
      */
     public List<Container> getContainersByCodigoPostal(int codigoPostal) {
-        return repositorioEnMemoria.values().stream()
-                // 2. Compara los dos int usando ==
-                .filter(container -> container.getCodigoPostal() == codigoPostal)
-                .collect(Collectors.toList());
+       return containerRepository.findByCodigoPostal(codigoPostal);
     }
-    // --- Métodos de Ayuda (Helpers) ---
-
-    /**
-     * 3. Obtener un contenedor por su ID.
-     * (Necesario para tu método 'getColor' y 'getUsoPorFecha')
-     */
-    public Optional<Container> getContainerById(Long id) {
-        // Optional es más seguro que devolver null
-        return Optional.ofNullable(repositorioEnMemoria.get(id));
-    }
-
-    /**
-     * 4. Obtener todos los contenedores.
-     */
-    public List<Container> getAllContainers() {
-        return new ArrayList<>(repositorioEnMemoria.values());
-    }
-    
-    // --- NOTAS SOBRE OTROS MÉTODOS ---
-    
-    /*
-     * "Consulta del uso/estado de un contenedor por fecha"
-     *
-     * Esta lógica NO vive aquí. Vive en el `NivelDeLlenadoService`.
-     * El Controlador llamará a:
-     * 1. `containerService.getContainerById(id)` (para saber la capacidad)
-     * 2. `nivelDeLlenadoService.getHistorialPorFechas(id, fechaInicio, fechaFin)`
-     */
+   
+  
 }

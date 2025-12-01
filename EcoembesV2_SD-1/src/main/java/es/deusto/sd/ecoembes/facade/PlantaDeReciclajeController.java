@@ -1,5 +1,6 @@
 package es.deusto.sd.ecoembes.facade;
 
+import es.deusto.sd.ecoembes.entity.Asignacion;
 import es.deusto.sd.ecoembes.entity.PlantaDeReciclaje;
 import es.deusto.sd.ecoembes.service.PlantaDeReciclajeService;
 import es.deusto.sd.ecoembes.dto.PlantaDTO; // ¡Usa tu DTO!
@@ -13,6 +14,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.Map;
 
 @RestController
@@ -61,6 +63,50 @@ public class PlantaDeReciclajeController {
         } catch (RuntimeException e) {
             // Esto captura el "Planta no encontrada"
             return new ResponseEntity<>(Map.of("error", e.getMessage()), HttpStatus.NOT_FOUND);
+        } catch (Exception e) {
+            return new ResponseEntity<>(Map.of("error", "Error interno"), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+    
+    /**
+     * MÉTODO 5: Asignación de contenedores a plantas de reciclaje.
+     * (¡CON TOKEN OBLIGATORIO!)
+     */
+    @Operation(summary = "Asignar un contenedor a una planta de reciclaje")
+    @PostMapping
+    public ResponseEntity<Map<String, Object>> crearAsignacion(
+            
+            @Parameter(description = "Token de autenticación", required = true)
+            @RequestHeader("Authorization") String token,
+            @Parameter(description = "Id del Contenedor", required = true)
+            @RequestParam("Id del Contenedor")  long idContainer,
+            @Parameter(description = "Id de la Planta de Reciclaje", required = true)
+            @RequestParam("Id de la Planta de Reciclaje") long idPlantaDeReciclaje) {
+        
+        try {
+            Asignacion nuevaAsignacion = plantaService.asignarContenedorAPlanta(
+            		idContainer,
+					idPlantaDeReciclaje,
+                    token // Pasamos el token al servicio para la auditoría
+            );
+            
+            // Creamos una respuesta segura con los datos de auditoría
+            Map<String, Object> respuesta = new HashMap<>();
+            respuesta.put("idAsignacion", nuevaAsignacion.getId()); // Asumiendo que Asignacion tiene ID
+            respuesta.put("fechaAsignacion", nuevaAsignacion.getFechaAsignacion());
+            respuesta.put("emailEmpleado", nuevaAsignacion.getEmpleado().getEmail());
+            respuesta.put("empleadoNombre", nuevaAsignacion.getEmpleado().getNombre());
+            respuesta.put("containerId", nuevaAsignacion.getContainer().getId());
+            respuesta.put("plantaId", nuevaAsignacion.getPlantaDeReciclaje().getId());
+            
+            return new ResponseEntity<>(respuesta, HttpStatus.CREATED);
+            
+        } catch (SecurityException e) {
+            // Captura el "Token inválido"
+            return new ResponseEntity<>(Map.of("error", e.getMessage()), HttpStatus.UNAUTHORIZED);
+        } catch (RuntimeException e) {
+            // Captura "No hay capacidad", "No encontrado", etc.
+            return new ResponseEntity<>(Map.of("error", e.getMessage()), HttpStatus.BAD_REQUEST);
         } catch (Exception e) {
             return new ResponseEntity<>(Map.of("error", "Error interno"), HttpStatus.INTERNAL_SERVER_ERROR);
         }
