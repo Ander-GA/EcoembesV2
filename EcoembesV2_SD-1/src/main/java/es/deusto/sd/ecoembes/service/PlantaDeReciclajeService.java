@@ -1,8 +1,9 @@
 package es.deusto.sd.ecoembes.service;
 
+import es.deusto.sd.ecoembes.dao.AsignacionRepository;
+
 import es.deusto.sd.ecoembes.dao.ContainerRepository;
 import es.deusto.sd.ecoembes.dao.PlantaDeReciclajeRepository;
-import es.deusto.sd.ecoembes.dao.RepositorioAsignaciones;
 import es.deusto.sd.ecoembes.entity.Asignacion;
 import es.deusto.sd.ecoembes.entity.Container;
 import es.deusto.sd.ecoembes.entity.Empleado;
@@ -25,7 +26,7 @@ public class PlantaDeReciclajeService {
 
 	private final PlantaDeReciclajeRepository plantaRepository;
 	private final ContainerRepository containerRepository;
-	private final RepositorioAsignaciones repositorioAsignaciones;
+	private final AsignacionRepository asignacionRepository;
     private final AuthService authService;
     private final AtomicLong idGenerator = new AtomicLong(0);
 
@@ -35,12 +36,12 @@ public class PlantaDeReciclajeService {
 
     // Inyección de dependencias
     public PlantaDeReciclajeService(PlantaDeReciclajeRepository plantaRepository,
-			ContainerRepository containerRepository, RepositorioAsignaciones repositorioAsignaciones,AuthService authService, NivelLlenadoService nivelLlenadoService,
+			ContainerRepository containerRepository, AsignacionRepository asignacionRepository,AuthService authService, NivelLlenadoService nivelLlenadoService,
 			ContainerService containerService) {
 		super();
 		this.plantaRepository = plantaRepository;
 		this.containerRepository = containerRepository;
-		this.repositorioAsignaciones = repositorioAsignaciones;
+		this.asignacionRepository = asignacionRepository;
 		this.authService = authService;
 		this.nivelLlenadoService = nivelLlenadoService;
 		this.containerService = containerService;
@@ -88,7 +89,7 @@ public class PlantaDeReciclajeService {
         // 5. ¡Éxito! Creamos la asignación para la auditoría
         Asignacion asignacion = new Asignacion(LocalDate.now(), empleado, planta, container);
 
-        repositorioAsignaciones.save(asignacion);
+        asignacionRepository.save(asignacion);
         
         
         return asignacion;

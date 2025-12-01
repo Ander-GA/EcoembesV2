@@ -1,5 +1,6 @@
 package es.deusto.sd.ecoembes.service;
 
+import es.deusto.sd.ecoembes.dao.NivelLlenadoRepository;
 import es.deusto.sd.ecoembes.entity.NivelLlenado;
 import es.deusto.sd.ecoembes.entity.NivelLlenado.TipoID;
 import org.springframework.stereotype.Service;
@@ -17,17 +18,17 @@ import java.util.stream.Collectors;
 @Service
 public class NivelLlenadoService {
 
-    private final List<NivelLlenado> todosLosRegistros = new ArrayList<>();
+	private final NivelLlenadoRepository nivelLlenadoRepository;
     
-    public NivelLlenadoService() {
-        // Vacío. El DataInitializer lo llenará.
+    public NivelLlenadoService(NivelLlenadoRepository nivelLlenadoRepository) {
+		this.nivelLlenadoRepository = nivelLlenadoRepository;
     }
 
     /**
      * Añade un nuevo registro de nivel al repositorio central.
      */
     public NivelLlenado addRegistro(NivelLlenado registro) {
-        todosLosRegistros.add(registro);
+        nivelLlenadoRepository.save(registro);
         return registro;
     }
 
@@ -35,11 +36,8 @@ public class NivelLlenadoService {
      * Obtiene el historial completo de un elemento (Contenedor O Planta),
      * ordenado por fecha (del más antiguo al más nuevo).
      */
-    public List<NivelLlenado> getHistorial(long elementoId, TipoID tipo) {
-        return todosLosRegistros.stream()
-            .filter(reg -> reg.getIdObjetoAsociado() == elementoId && reg.getTipoId() == tipo)
-            .sorted(Comparator.comparing(NivelLlenado::getFechaRegistro)) 
-            .collect(Collectors.toList());
+    public List<NivelLlenado> getHistorial(long elementoId, TipoID tipo) {	
+    	return nivelLlenadoRepository.findByIdObjetoAsociadoAndTipoIdOrderByFechaRegistroAsc(elementoId, tipo);
     }
     
     /**
@@ -58,13 +56,7 @@ public class NivelLlenadoService {
      * (Este es el método corregido y completado)
      */
     public List<NivelLlenado> getHistorialPorFechas(long elementoId, TipoID tipo, LocalDate fechaInicio, LocalDate fechaFin) {
-        return todosLosRegistros.stream()
-            .filter(reg -> reg.getIdObjetoAsociado() == elementoId && reg.getTipoId() == tipo)
-            // Filtra por rango de fechas
-            .filter(reg -> !reg.getFechaRegistro().isBefore(fechaInicio))
-            .filter(reg -> !reg.getFechaRegistro().isAfter(fechaFin)) // La parte que faltaba
-            .sorted(Comparator.comparing(NivelLlenado::getFechaRegistro))
-            .collect(Collectors.toList());
+        return nivelLlenadoRepository.findByIdObjetoAsociadoAndTipoIdOrderByFechaRegistroAsc(elementoId, tipo);
     }
 
     /**
@@ -74,18 +66,6 @@ public class NivelLlenadoService {
      * Esencial para los Métodos 3 y 4.
      */
 	public NivelLlenado getUltimoNivelHastaFecha(long elementoId, TipoID tipo, LocalDate fecha) {
-	        
-	        return todosLosRegistros.stream()
-	            // 1. Filtra por el objeto (Ej: Contenedor 1) y el tipo (CONTAINER)
-	            .filter(reg -> reg.getIdObjetoAsociado() == elementoId && reg.getTipoId() == tipo)
-	            
-	            // 2. Filtra solo fechas ANTERIORES o IGUALES a la que buscamos
-	            .filter(reg -> !reg.getFechaRegistro().isAfter(fecha))
-	            
-	            // 3. De los que quedan, coge el que tenga la fecha más alta (el más nuevo)
-	            .max(Comparator.comparing(NivelLlenado::getFechaRegistro))
-	            
-	            // 4. Si no encuentra NINGUNO, devuelve null de forma segura
-	            .orElse(null); 
+	        return nivelLlenadoRepository.findTop1ByIdObjetoAsociadoAndTipoIdAndFechaRegistroLessThanEqualOrderByFechaRegistroDesc(elementoId, tipo, fecha);
 	    }
 }
