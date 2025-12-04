@@ -43,7 +43,7 @@ public class DataInitializer {
             empleadoRepository.saveAll(List.of(ander,iñigo,emilio,gaizka,admin));            
             logger.info("Empleados de Ecoembes guardados!");
             
-            // 2. Crear Plantas de Reciclaje [CORREGIDO: Incluye Endpoint y Tipo]
+            // 2. Crear Plantas de Reciclaje 
             // Usamos URLs ficticias o localhost para probar la conexión
             PlantaDeReciclaje plas = new PlantaDeReciclaje("PlasSB Ltd", "http://localhost:8081", 48007, 5000.0, "REST");
             PlantaDeReciclaje cont = new PlantaDeReciclaje("ContSocket Ltd", "127.0.0.1:9090", 48009, 3000.0, "SOCKET");
