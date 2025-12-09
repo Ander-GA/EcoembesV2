@@ -24,8 +24,6 @@ public class PlantaDeReciclajeService {
     private final AsignacionRepository asignacionRepository;
     private final AuthService authService;
     private final NivelLlenadoService nivelLlenadoService;
-    
-    // Inyectamos la factoría
     private final RecyclingGatewayFactory gatewayFactory;
 
     public PlantaDeReciclajeService(PlantaDeReciclajeRepository plantaRepository,
@@ -43,61 +41,78 @@ public class PlantaDeReciclajeService {
     }
 
     public PlantaDeReciclaje createPlanta(PlantaDeReciclaje planta) {
-        // JPA se encarga del ID
         return plantaRepository.save(planta);
     }
 
     public double getCapacidadDisponible(long plantaId, LocalDate fecha) {
-        // 1. Datos estáticos de BBDD local
+        // 1. Obtener datos de la planta de BBDD
         PlantaDeReciclaje planta = plantaRepository.findById(plantaId)
             .orElseThrow(() -> new RuntimeException("Planta no encontrada"));
 
-        // 2. Intentar obtener capacidad REAL del servicio externo
         try {
-            // Usamos el campo tipoServicio para pedir el gateway correcto
-            // Usamos direccion como endpoint (ej: "http://localhost:8080" o "127.0.0.1:9090")
+            // 2. Obtener el Gateway adecuado (Factory)
             IRecyclingPlantGateway gateway = gatewayFactory.getGateway(planta.getTipoServicio());
             
-            // Si el servicio externo responde, usamos ese dato
+            // 3. Llamada al servicio externo (Polimorfismo)
+            // Nota: Ya no pasamos la URL, el gateway la tiene configurada internamente
             Optional<Double> capacidadExterna = gateway.getCapacidadReal(fecha);
+            
             if (capacidadExterna.isPresent()) {
                 return capacidadExterna.get();
             }
         } catch (Exception e) {
-            System.err.println("Error conectando con servicio externo: " + e.getMessage());
+            System.err.println("Advertencia: Fallo al conectar con servicio externo (" + planta.getNombre() + "): " + e.getMessage());
         }
 
-        // 3. Fallback: Si falla el externo, usamos cálculo local (como tenías antes)
-        double capacidadMaxima = planta.getCapacidadMaxima();
+        // 4. Fallback: Si falla el externo o no devuelve dato, usamos cálculo local
         NivelLlenado ultimoNivel = nivelLlenadoService.getUltimoNivelHastaFecha(plantaId, TipoID.PLANTA_DE_RECICLAJE, fecha);
         double nivelActual = (ultimoNivel != null) ? ultimoNivel.getNivelDeLlenado() : 0.0;
 
-        return capacidadMaxima - nivelActual;
+        return planta.getCapacidadMaxima() - nivelActual;
     }
 
     public Asignacion asignarContenedorAPlanta(long containerId, long plantaId, String token) {
-        // Lógica de validación (igual que antes)
+        // 1. Validar Token y Empleado
         Empleado empleado = authService.getEmpleadoByToken(token);
-        if (empleado == null) throw new SecurityException("Token inválido");
+        if (empleado == null) {
+            throw new SecurityException("Token inválido o sesión expirada.");
+        }
 
+        // 2. Recuperar Entidades
         Container container = containerRepository.findById(containerId)
-            .orElseThrow(() -> new RuntimeException("Contenedor no encontrado"));
+            .orElseThrow(() -> new RuntimeException("Contenedor no encontrado con ID: " + containerId));
         
         PlantaDeReciclaje planta = plantaRepository.findById(plantaId)
-             .orElseThrow(() -> new RuntimeException("Planta no encontrada"));
+             .orElseThrow(() -> new RuntimeException("Planta no encontrada con ID: " + plantaId));
 
-        // Usar la capacidad calculada (que puede venir del externo)
+        // 3. Verificar Capacidad Disponible en la Planta
+        // (Esto llama internamente al Gateway para preguntar a la planta externa)
         double capacidadDisponible = getCapacidadDisponible(plantaId, LocalDate.now());
         
-        // Asumiendo que obtenemos el llenado del contenedor
+        // Obtener el nivel actual del contenedor
         NivelLlenado nivelContenedor = nivelLlenadoService.getUltimoNivelHastaFecha(containerId, TipoID.CONTAINER, LocalDate.now());
         double cantidadEnContenedor = (nivelContenedor != null) ? nivelContenedor.getNivelDeLlenado() : 0.0;
 
         if (cantidadEnContenedor > capacidadDisponible) {
-            throw new RuntimeException("No hay capacidad disponible");
+            throw new RuntimeException("Operación denegada: No hay capacidad suficiente en la planta.");
         }
 
+        // 4. Guardar la Asignación en Base de Datos Local (Ecoembes)
         Asignacion asignacion = new Asignacion(LocalDate.now(), empleado, planta, container);
-        return asignacionRepository.save(asignacion);
+        Asignacion nuevaAsignacion = asignacionRepository.save(asignacion);
+
+        // 5. Notificar a la Planta Externa (Envío de datos de asignación)
+        try {
+            IRecyclingPlantGateway gateway = gatewayFactory.getGateway(planta.getTipoServicio());
+            
+            // Polimorfismo: Envía JSON (REST) o Trama de texto (Socket) según corresponda
+            gateway.notificarAsignacion(nuevaAsignacion);
+            
+        } catch (Exception e) {
+            // Logueamos el error pero NO fallamos la transacción principal
+            System.err.println("Advertencia: Asignación guardada localmente, pero falló la notificación a la planta externa: " + e.getMessage());
+        }
+
+        return nuevaAsignacion;
     }
 }

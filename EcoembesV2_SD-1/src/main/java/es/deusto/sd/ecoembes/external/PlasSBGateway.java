@@ -11,6 +11,9 @@ import java.time.LocalDate;
 import java.util.Optional;
 import java.util.Map;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import es.deusto.sd.ecoembes.entity.Asignacion;
+
 import org.springframework.stereotype.Component;
 
 @Component("PlasSBGateway") // Nombre para identificarlo en la factoría
@@ -48,5 +51,35 @@ public class PlasSBGateway implements IRecyclingPlantGateway {
             e.printStackTrace();
         }
         return Optional.empty();
+    }
+    
+    
+    @Override
+    public void notificarAsignacion(Asignacion asignacion) {
+        // URL del endpoint de asignaciones
+        String url = endpoint + "/api/asignaciones"; // Cambiamos /notificaciones por /asignaciones para ser más REST
+
+        try {
+            // Construimos un JSON con los datos útiles para la planta
+            String jsonBody = String.format(
+                "{\"containerId\": %d, \"nivelLlenado\": %.2f, \"fecha\": \"%s\"}",
+                asignacion.getContainer().getId(),
+                asignacion.getContainer().getCapacidad(), // O el nivel real si lo tuvieras
+                asignacion.getFechaAsignacion().toString()
+            );
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+                    .build();
+
+            httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            System.out.println("--> [PlasSBGateway] Asignación enviada a PlasSB.");
+
+        } catch (Exception e) {
+            System.err.println("Error enviando asignación a PlasSB: " + e.getMessage());
+        }
+    }
     }
 }

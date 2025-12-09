@@ -10,6 +10,8 @@ import java.time.LocalDate;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
 
+import es.deusto.sd.ecoembes.entity.Asignacion;
+
 @Component("ContSocketGateway")
 public class ContSocketGateway implements IRecyclingPlantGateway {
 
@@ -34,5 +36,27 @@ public class ContSocketGateway implements IRecyclingPlantGateway {
             e.printStackTrace();
         }
         return Optional.empty();
+    }
+    
+
+    @Override
+    public void notificarAsignacion(Asignacion asignacion) {
+        try {
+            String[] parts = endpoint.split(":");
+            String host = parts[0];
+            int port = Integer.parseInt(parts[1]);
+
+            try (Socket socket = new Socket(host, port);
+                 DataOutputStream out = new DataOutputStream(socket.getOutputStream())) {
+                
+                // Enviamos el mensaje con el prefijo especial
+                String mensaje = "NOTIFY:Contenedor " + asignacion.getContainer().getId() + " asignado.";
+                out.writeUTF(mensaje);
+                // No esperamos respuesta (fire and forget)
+                System.out.println("--> [ContSocketGateway] Notificación enviada: " + mensaje);
+            }
+        } catch (Exception e) {
+            System.err.println("Error notificando a ContSocket: " + e.getMessage());
+        }
     }
 }
