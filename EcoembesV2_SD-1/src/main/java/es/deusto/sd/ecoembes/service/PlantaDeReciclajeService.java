@@ -59,7 +59,7 @@ public class PlantaDeReciclajeService {
             IRecyclingPlantGateway gateway = gatewayFactory.getGateway(planta.getTipoServicio());
             
             // Si el servicio externo responde, usamos ese dato
-            Optional<Double> capacidadExterna = gateway.getCapacidadReal(planta.getDireccion(), fecha);
+            Optional<Double> capacidadExterna = gateway.getCapacidadReal(fecha);
             if (capacidadExterna.isPresent()) {
                 return capacidadExterna.get();
             }

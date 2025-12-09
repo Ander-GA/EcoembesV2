@@ -1,3 +1,6 @@
+/*
+ * Codigo generado con ayuda de Gemini.
+ * */
 package es.deusto.sd.ecoembes.external;
 
 import java.io.DataInputStream;
@@ -10,8 +13,9 @@ import org.springframework.stereotype.Component;
 @Component("ContSocketGateway")
 public class ContSocketGateway implements IRecyclingPlantGateway {
 
+	private final String endpoint = "127.0.0.1:9090";
     @Override
-    public Optional<Double> getCapacidadReal(String endpoint, LocalDate fecha) {
+    public Optional<Double> getCapacidadReal(LocalDate fecha) {
         // endpoint sería "IP:PUERTO", ej: "127.0.0.1:9090"
         String[] parts = endpoint.split(":");
         String host = parts[0];

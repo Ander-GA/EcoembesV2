@@ -1,3 +1,6 @@
+/*
+ * Codigo generado con ayuda de Gemini.
+ * */
 package es.deusto.sd.ecoembes.external;
 
 import java.net.URI;
@@ -15,6 +18,7 @@ public class PlasSBGateway implements IRecyclingPlantGateway {
 
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
+    private final String endpoint = "http://localhost:8081";
 
     public PlasSBGateway() {
         this.httpClient = HttpClient.newHttpClient();
@@ -22,7 +26,7 @@ public class PlasSBGateway implements IRecyclingPlantGateway {
     }
 
     @Override
-    public Optional<Double> getCapacidadReal(String endpoint, LocalDate fecha) {
+    public Optional<Double> getCapacidadReal(LocalDate fecha) {
         // endpoint sería la URL base, ej: "http://localhost:8082"
         String url = endpoint + "/api/capacidades?fecha=" + fecha.toString();
         
