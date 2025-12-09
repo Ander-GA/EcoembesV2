@@ -81,5 +81,4 @@ public class PlasSBGateway implements IRecyclingPlantGateway {
             System.err.println("Error enviando asignación a PlasSB: " + e.getMessage());
         }
     }
-    }
 }

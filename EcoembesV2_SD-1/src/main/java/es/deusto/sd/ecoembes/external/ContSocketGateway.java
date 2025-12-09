@@ -1,6 +1,3 @@
-/*
- * Codigo generado con ayuda de Gemini.
- * */
 package es.deusto.sd.ecoembes.external;
 
 import java.io.DataInputStream;
@@ -15,10 +12,10 @@ import es.deusto.sd.ecoembes.entity.Asignacion;
 @Component("ContSocketGateway")
 public class ContSocketGateway implements IRecyclingPlantGateway {
 
-	private final String endpoint = "127.0.0.1:9090";
+    private final String endpoint = "127.0.0.1:9090";
+
     @Override
     public Optional<Double> getCapacidadReal(LocalDate fecha) {
-        // endpoint sería "IP:PUERTO", ej: "127.0.0.1:9090"
         String[] parts = endpoint.split(":");
         String host = parts[0];
         int port = Integer.parseInt(parts[1]);
@@ -37,7 +34,6 @@ public class ContSocketGateway implements IRecyclingPlantGateway {
         }
         return Optional.empty();
     }
-    
 
     @Override
     public void notificarAsignacion(Asignacion asignacion) {
@@ -49,11 +45,15 @@ public class ContSocketGateway implements IRecyclingPlantGateway {
             try (Socket socket = new Socket(host, port);
                  DataOutputStream out = new DataOutputStream(socket.getOutputStream())) {
                 
-                // Enviamos el mensaje con el prefijo especial
-                String mensaje = "NOTIFY:Contenedor " + asignacion.getContainer().getId() + " asignado.";
+                // CORRECCIÓN: Usamos el protocolo "ASIGNAR" que espera el servidor
+                // Formato: ASIGNAR:id_contenedor;capacidad;fecha
+                String mensaje = String.format("ASIGNAR:%d;%.2f;%s",
+                        asignacion.getContainer().getId(),
+                        asignacion.getContainer().getCapacidad(),
+                        asignacion.getFechaAsignacion().toString());
+                
                 out.writeUTF(mensaje);
-                // No esperamos respuesta (fire and forget)
-                System.out.println("--> [ContSocketGateway] Notificación enviada: " + mensaje);
+                System.out.println("--> [ContSocketGateway] Asignación enviada: " + mensaje);
             }
         } catch (Exception e) {
             System.err.println("Error notificando a ContSocket: " + e.getMessage());
