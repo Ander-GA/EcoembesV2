@@ -1,3 +1,4 @@
+//Codigo generado con ayuda de gemini para implementacion masiva de contenedores.
 package es.deusto.sd.ecoembes.service;
 
 import es.deusto.sd.ecoembes.dao.PlantaDeReciclajeRepository;
@@ -14,6 +15,8 @@ import es.deusto.sd.ecoembes.external.IRecyclingPlantGateway;
 
 import org.springframework.stereotype.Service;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -45,16 +48,11 @@ public class PlantaDeReciclajeService {
     }
 
     public double getCapacidadDisponible(long plantaId, LocalDate fecha) {
-        // 1. Obtener datos de la planta de BBDD
         PlantaDeReciclaje planta = plantaRepository.findById(plantaId)
             .orElseThrow(() -> new RuntimeException("Planta no encontrada"));
 
         try {
-            // 2. Obtener el Gateway adecuado (Factory)
             IRecyclingPlantGateway gateway = gatewayFactory.getGateway(planta.getTipoServicio());
-            
-            // 3. Llamada al servicio externo (Polimorfismo)
-            // Nota: Ya no pasamos la URL, el gateway la tiene configurada internamente
             Optional<Double> capacidadExterna = gateway.getCapacidadReal(fecha);
             
             if (capacidadExterna.isPresent()) {
@@ -64,55 +62,71 @@ public class PlantaDeReciclajeService {
             System.err.println("Advertencia: Fallo al conectar con servicio externo (" + planta.getNombre() + "): " + e.getMessage());
         }
 
-        // 4. Fallback: Si falla el externo o no devuelve dato, usamos cálculo local
+        // Fallback local si falla la conexión
         NivelLlenado ultimoNivel = nivelLlenadoService.getUltimoNivelHastaFecha(plantaId, TipoID.PLANTA_DE_RECICLAJE, fecha);
         double nivelActual = (ultimoNivel != null) ? ultimoNivel.getNivelDeLlenado() : 0.0;
 
         return planta.getCapacidadMaxima() - nivelActual;
     }
 
-    public Asignacion asignarContenedorAPlanta(long containerId, long plantaId, String token) {
-        // 1. Validar Token y Empleado
+    /**
+     * Método para asignación MASIVA.
+     * Recibe una lista de IDs de contenedores y los asigna uno a uno si hay capacidad.
+     */
+    public List<Asignacion> asignarContenedoresMasivos(long plantaId, List<Long> containerIds, String token) {
+        // 1. Validar Token y Empleado (Solo una vez)
         Empleado empleado = authService.getEmpleadoByToken(token);
         if (empleado == null) {
             throw new SecurityException("Token inválido o sesión expirada.");
         }
 
-        // 2. Recuperar Entidades
-        Container container = containerRepository.findById(containerId)
-            .orElseThrow(() -> new RuntimeException("Contenedor no encontrado con ID: " + containerId));
-        
+        // 2. Obtener Planta y Gateway (Solo una vez)
         PlantaDeReciclaje planta = plantaRepository.findById(plantaId)
              .orElseThrow(() -> new RuntimeException("Planta no encontrada con ID: " + plantaId));
 
-        // 3. Verificar Capacidad Disponible en la Planta
-        // (Esto llama internamente al Gateway para preguntar a la planta externa)
-        double capacidadDisponible = getCapacidadDisponible(plantaId, LocalDate.now());
+        IRecyclingPlantGateway gateway = gatewayFactory.getGateway(planta.getTipoServicio());
         
-        // Obtener el nivel actual del contenedor
-        NivelLlenado nivelContenedor = nivelLlenadoService.getUltimoNivelHastaFecha(containerId, TipoID.CONTAINER, LocalDate.now());
-        double cantidadEnContenedor = (nivelContenedor != null) ? nivelContenedor.getNivelDeLlenado() : 0.0;
+        // 3. Consultar Capacidad Disponible (Solo una vez al inicio)
+        double capacidadDisponible = getCapacidadDisponible(plantaId, LocalDate.now());
 
-        if (cantidadEnContenedor > capacidadDisponible) {
-            throw new RuntimeException("Operación denegada: No hay capacidad suficiente en la planta.");
+        List<Asignacion> asignacionesRealizadas = new ArrayList<>();
+
+        // 4. Iterar sobre los contenedores
+        for (Long containerId : containerIds) {
+            try {
+                Container container = containerRepository.findById(containerId)
+                    .orElseThrow(() -> new RuntimeException("Contenedor " + containerId + " no encontrado"));
+
+                // Calcular llenado actual del contenedor
+                NivelLlenado nivel = nivelLlenadoService.getUltimoNivelHastaFecha(containerId, TipoID.CONTAINER, LocalDate.now());
+                double cantidadBasura = (nivel != null) ? nivel.getNivelDeLlenado() : 0.0;
+
+                // Verificar si cabe en la planta
+                if (capacidadDisponible >= cantidadBasura) {
+                    // Restamos capacidad para la siguiente iteración (simulación en memoria durante la transacción)
+                    capacidadDisponible -= cantidadBasura;
+
+                    // A. Guardar Asignación Local
+                    Asignacion asignacion = new Asignacion(LocalDate.now(), empleado, planta, container);
+                    asignacion = asignacionRepository.save(asignacion);
+                    asignacionesRealizadas.add(asignacion);
+
+                    // B. Notificar a la Planta Externa
+                    try {
+                        gateway.notificarAsignacion(asignacion);
+                    } catch (Exception e) {
+                        System.err.println("Error notificando contenedor " + containerId + ": " + e.getMessage());
+                    }
+                } else {
+                    System.err.println("Planta llena. No se pudo asignar contenedor: " + containerId);
+                    // Paramos de asignar si ya no cabe más
+                    break; 
+                }
+            } catch (Exception e) {
+                System.err.println("Error procesando contenedor " + containerId + ": " + e.getMessage());
+            }
         }
 
-        // 4. Guardar la Asignación en Base de Datos Local (Ecoembes)
-        Asignacion asignacion = new Asignacion(LocalDate.now(), empleado, planta, container);
-        Asignacion nuevaAsignacion = asignacionRepository.save(asignacion);
-
-        // 5. Notificar a la Planta Externa (Envío de datos de asignación)
-        try {
-            IRecyclingPlantGateway gateway = gatewayFactory.getGateway(planta.getTipoServicio());
-            
-            // Polimorfismo: Envía JSON (REST) o Trama de texto (Socket) según corresponda
-            gateway.notificarAsignacion(nuevaAsignacion);
-            
-        } catch (Exception e) {
-            // Logueamos el error pero NO fallamos la transacción principal
-            System.err.println("Advertencia: Asignación guardada localmente, pero falló la notificación a la planta externa: " + e.getMessage());
-        }
-
-        return nuevaAsignacion;
+        return asignacionesRealizadas;
     }
 }
