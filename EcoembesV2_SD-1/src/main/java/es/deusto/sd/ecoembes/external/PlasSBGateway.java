@@ -9,6 +9,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.LocalDate;
 import java.util.Optional;
+import java.util.Locale;
 import java.util.Map;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -61,7 +62,7 @@ public class PlasSBGateway implements IRecyclingPlantGateway {
 
         try {
             // Construimos un JSON con los datos útiles para la planta
-            String jsonBody = String.format(
+            String jsonBody = String.format(Locale.US,
                 "{\"containerId\": %d, \"nivelLlenado\": %.2f, \"fecha\": \"%s\"}",
                 asignacion.getContainer().getId(),
                 asignacion.getContainer().getCapacidad(), // O el nivel real si lo tuvieras

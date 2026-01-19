@@ -4,6 +4,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.net.Socket;
 import java.time.LocalDate;
+import java.util.Locale;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
 
@@ -47,7 +48,7 @@ public class ContSocketGateway implements IRecyclingPlantGateway {
                 
                 // CORRECCIÓN: Usamos el protocolo "ASIGNAR" que espera el servidor
                 // Formato: ASIGNAR:id_contenedor;capacidad;fecha
-                String mensaje = String.format("ASIGNAR:%d;%.2f;%s",
+                String mensaje = String.format(Locale.US,"ASIGNAR:%d;%.2f;%s",
                         asignacion.getContainer().getId(),
                         asignacion.getContainer().getCapacidad(),
                         asignacion.getFechaAsignacion().toString());
