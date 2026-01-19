@@ -81,7 +81,7 @@ public class ContainerController {
      */
     @Operation(summary = "Obtener historial de un contenedor por fecha")
     @GetMapping("/{id}/historial")
-    public ResponseEntity<List<NivelLlenado>> getHistorialContenedor(
+    public ResponseEntity<List<es.deusto.sd.ecoembes.dto.NivelLlenadoDTO>> getHistorialContenedor(
     		@Parameter(name = "id", description = "ID del contenedor", required = true)
     		@PathVariable("id") Long id,
 
@@ -91,26 +91,46 @@ public class ContainerController {
     		@Parameter(name = "fechaFin", description = "Fecha de fin (Formato: YYYY-MM-DD)", required = true)
             @RequestParam("fechaFin") LocalDate fechaFin) {
 
+            try {
+                // 1. Buscamos el contenedor para saber su CAPACIDAD MAXIMA
+                Optional<Container> contenedorOpt = containerService.getContainerById(id);
+                if (contenedorOpt.isEmpty()) {
+                    return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+                }
+                Container contenedor = contenedorOpt.get();
+                double capacidadMax = contenedor.getCapacidad();
 
-        try {
-            
-            if (containerService.getContainerById(id).isEmpty()) {
-                return new ResponseEntity<>(HttpStatus.NOT_FOUND);
-            }
-            
-            // Usamos las variables LocalDate directamente
-            List<NivelLlenado> historial = nivelLlenadoService.getHistorialPorFechas(id, TipoID.CONTAINER, fechaInicio, fechaFin);
-            
-            if (historial.isEmpty()) {
-                return new ResponseEntity<>(HttpStatus.NO_CONTENT);
-            }
-            
-            return ResponseEntity.ok(historial);
+                // 2. Buscamos el historial (Entidades con litros)
+                List<NivelLlenado> historial = nivelLlenadoService.getHistorialPorFechas(id, TipoID.CONTAINER, fechaInicio, fechaFin);
+                
+                if (historial.isEmpty()) {
+                    return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+                }
+                
+                // 3. CONVERSIÓN INTELIGENTE: Calculamos el % aquí mismo
+                List<es.deusto.sd.ecoembes.dto.NivelLlenadoDTO> respuesta = historial.stream()
+                    .map(nivel -> {
+                        // La magia: (Litros / Capacidad) * 100
+                        double porcentaje = (nivel.getNivelDeLlenado() / capacidadMax) * 100.0;
+                        
+                        // Nos aseguramos de no pasar de 100% si hay error de datos
+                        if(porcentaje > 100.0) porcentaje = 100.0;
 
-        } catch (Exception e) {
-            return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
+                        return new es.deusto.sd.ecoembes.dto.NivelLlenadoDTO(
+                            nivel.getId(),
+                            porcentaje, // <--- ENVIAMOS EL % YA CALCULADO
+                            nivel.getFechaRegistro()
+                        );
+                    })
+                    .collect(Collectors.toList());
+                
+                return ResponseEntity.ok(respuesta);
+
+            } catch (Exception e) {
+                e.printStackTrace();
+                return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
+            }
         }
-    }
 
     /**
      * MÉTODO 3: Consulta del estado de los contenedores de una zona.
