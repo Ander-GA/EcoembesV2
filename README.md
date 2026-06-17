@@ -25,7 +25,7 @@ El servidor está estructurado bajo principios de código limpio y separación d
 
 1. **Clonar el repositorio:**
    ```bash
-   git clone [https://github.com/Ander-GA/](https://github.com/Ander-GA/)(https://github.com/Ander-GA/EcoembesV2.git)
+   git clone git clone https://github.com/Ander-GA/EcoembesV2.git
    ```
 2. **Ejecutar el servidor:**
    ```bash
